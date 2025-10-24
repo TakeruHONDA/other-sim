@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>たいけん！分散・t検定ワールド</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/simple-statistics@7.8.3/dist/simple-statistics.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" integrity="sha384-n8MVd4RsNIU0KOVEMckMnTMk8EVLCXJcli1jdA+851JjGSRoD7BfwpnNAjZ9RzF" crossorigin="anonymous">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" integrity="sha384-XjKyOOlVjOTgjYWiadZp2maAmdl2AnOEQpMxOtPg+EtS1jgrYwSshFL4AsoCnhG" crossorigin="anonymous"></script>
+    <script defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+      integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05"
+      crossorigin="anonymous"
+      onload="
+        try {
+          if (typeof renderMathInElement === 'function') {
+            renderMathInElement(document.body, {
+              delimiters: [
+                  {left: '$$', right: '$$', display: true},
+                  {left: '$', right: '$', display: false},
+                  {left: '\\(', right: '\\)', display: false},
+                  {left: '\\[', right: '\\]', display: true}
+              ],
+              throwOnError: false
+            });
+          }
+        } catch (e) {
+          console.error('KaTeX auto-render onload failed:', e);
+        }
+      ">
+    </script>
+    
+    <style>
+        html { scroll-behavior: smooth; }
+        body { background-color: #fdfaf6; color: #3a3a3a; font-family: 'Helvetica Neue', 'Arial', 'Hiragino Sans', 'Meiryo', sans-serif; }
+        .hero-title { text-shadow: 2px 2px 4px rgba(0,0,0,0.1); }
+        .card {
+            background-color: white;
+            border-radius: 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            margin-bottom: 3rem;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+        .btn {
+            border-radius: 0.75rem;
+            font-weight: bold;
+            padding: 0.75rem 1.5rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: inline-block;
+            margin-top: 1rem;
+        }
+        .btn-primary { background-color: #ffab76; color: white; }
+        .btn-primary:hover { background-color: #ff9a5c; transform: translateY(-2px); box-shadow: 0 7px 10px rgba(0,0,0,0.1); }
+        .btn-secondary { background-color: #76d7c4; color: white; }
+        .btn-secondary:hover { background-color: #5dade2; transform: translateY(-2px); box-shadow: 0 7px 10px rgba(0,0,0,0.1); }
+        .step-content {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.5s ease, transform 0.5s ease, max-height 0.5s ease;
+            max-height: 0;
+            overflow: hidden;
+        }
+        .step-content.visible {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 1500px;
+        }
+        .prose-img { display: block; margin: 1.5rem auto; border-radius: 0.75rem; max-width: 100%; height: auto; }
+        .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5rem 0; }
+        .input-group { margin-bottom: 1.5rem; }
+         .input-grid {
+             display: grid;
+             grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+             gap: 0.5rem;
+         }
+         .input-grid input {
+             width: 100%;
+             padding: 0.5rem;
+             border: 1px solid #d1d5db; /* gray-300 */
+             border-radius: 0.375rem; /* rounded-md */
+             text-align: center;
+         }
+         .chart-grid {
+             display: grid;
+             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+             gap: 1.5rem;
+             margin-top: 1rem;
+         }
+         .chart-container {
+             position: relative;
+             height: 250px; /* Adjust height as needed */
+             width: 100%;
+         }
+    </style>
+</head>
+<body class="font-sans">
+
+    <section class="min-h-screen flex flex-col justify-center items-center text-center p-4" style="background: radial-gradient(circle, rgba(255,171,118,0.1) 0%, rgba(253,250,246,1) 70%);">
+        <h1 class="hero-title text-4xl sm:text-6xl md:text-7xl font-extrabold text-orange-500 mb-4">たいけん！<br>分散・t検定ワールド</h1>
+        <p class="text-lg sm:text-xl text-gray-600 max-w-2xl mb-8">データの「ちらばり具合」をあらわす『分散』と、<br>２つのグループの「平均値の差」を調べる『t検定』。<br>キミもいっしょに、その正体を探る冒険に出かけよう！</p>
+        <a href="#section-story" id="start-btn" class="btn btn-primary text-xl">冒険をはじめる！</a>
+    </section>
+
+    <div class="container mx-auto px-4 py-12 space-y-12">
+
+        <section id="section-story" class="card p-6 sm:p-10">
+            <h2 class="text-3xl font-bold text-center mb-2 text-blue-800">平均だけじゃ、わからない？</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">ここに、平均ヒット数がまったく同じ、2つの野球チームがある。<br>でも、グラフを見るとチームの様子がぜんぜんちがうみたい…？</p>
+            <div class="grid md:grid-cols-2 gap-8 items-start">
+                <div>
+                    <h3 class="text-2xl font-bold mb-4 text-center">Aパワーズ：<span class="text-orange-500">コツコツ安定チーム</span></h3>
+                    <p class="mb-4 text-center">全員がピッタリ<strong class="text-xl">5本</strong>のヒットを打つ、安定感ばつぐんのチームだ。</p>
+                    <ul class="text-center text-lg font-mono bg-gray-50 p-4 rounded-lg">
+                        <li>選手1: 5本</li><li>選手2: 5本</li><li>選手3: 5本</li><li>選手4: 5本</li><li>選手5: 5本</li>
+                    </ul>
+                    <p class="text-center font-bold text-2xl mt-4">平均: <span class="text-green-600">5</span> 本</p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold mb-4 text-center">Bチャレンジャーズ：<span class="text-purple-600">一発逆転チーム</span></h3>
+                    <p class="mb-4 text-center">すごく打つ選手と、あまり打てない選手の差が大きい、個性的なチームだ。</p>
+                     <ul class="text-center text-lg font-mono bg-gray-50 p-4 rounded-lg">
+                        <li>選手1: 10本</li><li>選手2: 0本</li><li>選手3: 5本</li><li>選手4: 10本</li><li>選手5: 0本</li>
+                    </ul>
+                     <p class="text-center font-bold text-2xl mt-4">平均: <span class="text-green-600">5</span> 本</p>
+                </div>
+            </div>
+            <div class="mt-10">
+                <p class="text-center text-xl font-bold mb-4">グラフで見ると、ちがいは一目瞭然！</p>
+                 <div class="chart-container w-full max-w-2xl mx-auto h-80 sm:h-96 relative">
+                    <canvas id="teamChart"></canvas>
+                </div>
+            </div>
+             <p class="mt-8 text-center text-lg bg-blue-50 p-6 rounded-lg text-blue-900">平均は同じ「5」なのに、Bチャレンジャーズのほうがグラフのデコボコが大きいね。この<strong class="text-2xl">「ちらばり具合」</strong>を数字にしたものが<strong class="text-2xl">「分散」</strong>なんだ！</p>
+        </section>
+
+        <section id="section-calculate" class="card p-6 sm:p-10">
+            <h2 class="text-3xl font-bold text-center mb-8 text-blue-800">分散の計算を体験しよう！ (Bチャレンジャーズの場合)</h2>
+            <div class="max-w-3xl mx-auto space-y-6">
+                <div class="bg-gray-50 p-6 rounded-xl">
+                    <h3 class="text-2xl font-bold">① 平均からの「ずれ（偏差）」を求める</h3>
+                    <p class="text-gray-700 mt-2 mb-4 leading-relaxed">ちらばり具合を知るための第一歩は、データの「中心」である平均値から、それぞれのデータがどれだけ離れているかを見ること。この「ずれ」を<strong class="text-blue-800">偏差（へんさ）</strong>と呼ぶよ。</p>
+                    <div class="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-md my-4">
+                        <p class="text-lg font-bold">偏差 = 各データ - 平均値</p>
+                    </div>
+                    <button onclick="toggleStep('step1-content')" class="btn btn-primary">計算を見る</button>
+                    <div id="step1-content" class="step-content mt-4">
+                        <p class="mb-4">Bチャレンジャーズの平均は5本だから…</p>
+                        <ul class="list-none space-y-2 font-mono text-lg bg-white p-4 rounded-lg">
+                            <li>選手1 (10本): $10 - 5 = \color{green}{+5}$</li>
+                            <li>選手2 (0本) : $0 - 5 = \color{red}{-5}$</li>
+                            <li>選手3 (5本) : $5 - 5 = 0$</li>
+                            <li>選手4 (10本): $10 - 5 = \color{green}{+5}$</li>
+                            <li>選手5 (0本) : $0 - 5 = \color{red}{-5}$</li>
+                        </ul>
+                        <div class="prose-img bg-white p-4 rounded-lg shadow-inner mt-4">
+                            <svg viewBox="0 0 400 100" xmlns="http://www.w3.org/2000/svg" class="w-full">
+                                <line x1="20" y1="50" x2="380" y2="50" stroke="#3a3a3a" stroke-width="2" />
+                                <g font-size="12" text-anchor="middle">
+                                    <line x1="50" y1="45" x2="50" y2="55" stroke="#3a3a3a" stroke-width="1.5" /><text x="50" y="70">0</text>
+                                    <line x1="200" y1="45" x2="200" y2="55" stroke="#3a3a3a" stroke-width="1.5" /><text x="200" y="70">5</text><text x="200" y="85" font-weight="bold" fill="#059669">平均</text>
+                                    <line x1="350" y1="45" x2="350" y2="55" stroke="#3a3a3a" stroke-width="1.5" /><text x="350" y="70">10</text>
+                                </g>
+                                <path d="M 200 48 Q 125 20 50 48" stroke="#dc2626" fill="none" stroke-width="2" marker-end="url(#arrow-red)" /><text x="125" y="20" text-anchor="middle" fill="#dc2626" font-weight="bold" font-size="14">-5</text>
+                                <path d="M 200 48 Q 275 20 350 48" stroke="#16a34a" fill="none" stroke-width="2" marker-end="url(#arrow-green)" /><text x="275" y="20" text-anchor="middle" fill="#16a34a" font-weight="bold" font-size="14">+5</text>
+                                <defs>
+                                    <marker id="arrow-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#dc2626" /></marker>
+                                    <marker id="arrow-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#16a34a" /></marker>
+                                </defs>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-xl">
+                    <h3 class="text-2xl font-bold">② 「ずれ（偏差）」を２乗する</h3>
+                    <p class="text-gray-700 mt-2 mb-4 leading-relaxed">偏差にはプラスとマイナスがあるから、そのまま足すと $0$ になっちゃう。そこで、全部<strong class="text-blue-800">2乗</strong>してプラスの値に変えるんだ。</p>
+                    <div class="bg-yellow-100 border-l-4 border-yellow-400 text-yellow-800 p-4 rounded-md my-4"><p class="font-bold">「2乗」って？</p><p class="mt-1">同じ数を2回かけること。例: $3^2 = 3 \times 3 = 9$</p></div>
+                    <button onclick="toggleStep('step2-content')" class="btn btn-primary">計算を見る</button>
+                    <div id="step2-content" class="step-content mt-4">
+                         <ul class="list-none space-y-2 font-mono text-lg bg-white p-4 rounded-lg">
+                            <li>$(+5)^2 = 25$</li><li>$(-5)^2 = 25$</li><li>$0^2 = 0$</li><li>$(+5)^2 = 25$</li><li>$(-5)^2 = 25$</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-xl">
+                    <h3 class="text-2xl font-bold">③ ２乗した値の平均を出す（これが分散！）</h3>
+                    <p class="text-gray-700 mt-2 mb-4 leading-relaxed">最後に、「偏差の2乗」を全部足して、データの数（5人）で割る。これが<strong class="text-orange-500 text-xl font-bold">分散</strong>だよ！</p>
+                    <div class="bg-blue-50 border-l-4 border-blue-400 text-blue-800 p-4 rounded-md my-4 text-center"><p class="text-xl font-bold">$$ \text{分散} = \frac{\sum_{i=1}^{n} (X_i - \bar{X})^2}{n} $$</p></div>
+                    <button onclick="toggleStep('step3-content')" class="btn btn-primary">計算を見る</button>
+                    <div id="step3-content" class="step-content mt-4">
+                        <div class="bg-white border-2 border-orange-200 rounded-xl p-6 text-center shadow-inner">
+                            <p class="text-lg mb-2">1. 偏差の2乗の合計:</p><div class="text-2xl font-mono p-4 bg-gray-50 rounded-lg mb-6">$$ 25 + 25 + 0 + 25 + 25 = 100 $$</div>
+                             <p class="text-lg mb-2">2. 合計値をデータ数(5)で割る:</p><div class="mt-2 bg-orange-50 p-4 rounded-lg"><span class="text-2xl font-bold">分散 = </span><span class="text-4xl font-bold font-mono text-orange-500">$$ \frac{100}{5} = 20 $$</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-teal-50 text-teal-900 p-8 rounded-2xl text-center">
+                    <h3 class="text-2xl font-bold mb-4">結論！</h3>
+                    <p class="text-lg">Bチャレンジャーズの分散は <strong class="text-3xl font-bold">20</strong>！</p>
+                    <p class="text-lg mt-2">Aパワーズは分散 <strong class="text-3xl font-bold">0</strong> だよ。</p>
+                    <p class="text-lg mt-6 bg-white p-4 rounded-lg shadow">分散が<strong class="text-teal-600">大きいほど</strong>データはちらばっていて、<strong class="text-teal-600">0に近いほど</strong>平均の周りに集まっているんだ！</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-calculator" class="card p-6 sm:p-10">
+            <h2 class="text-3xl font-bold text-center mb-2 text-blue-800">体験１：分散シミュレーター</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">好きな数字を10個入れてみよう。どんなグラフと分散になるかな？</p>
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-6" id="calculator-inputs">
+                </div>
+             <div class="text-center mb-10">
+                <button id="calculateVarianceBtn" class="btn btn-primary text-xl">分散を計算する！</button>
+            </div>
+            <div id="calculator-result" class="space-y-8">
+                </div>
+        </section>
+
+        <section id="section-2sd" class="card p-6 sm:p-10">
+            <h2 class="text-3xl font-bold text-center mb-8 text-indigo-800">科学者の秘密道具、2SDってなんだろう？</h2>
+            <div class="max-w-3xl mx-auto space-y-8">
+                <div>
+                    <h3 class="text-2xl font-bold text-indigo-700">ちらばりの「ものさし」を手に入れよう！ <span class="text-lg">(標準偏差)</span></h3>
+                    <p class="mt-2 text-gray-700 leading-relaxed">分散は単位が「2乗」になってて分かりにくい...。そこで、ちらばり具合をもっと分かりやすくする「ものさし」が<strong class="text-xl">標準偏差（Standard Deviation, SD）</strong>！ 分散にルート$\sqrt{\phantom{A}}$をつけるだけ！</p>
+                    <div class="bg-green-100 border-l-4 border-green-400 text-green-900 p-4 rounded-md my-4">
+                        <p class="font-bold">「ルート（$\sqrt{\phantom{A}}$）」って？</p>
+                        <p class="mt-1">「2乗」を元に戻す魔法！ $3 \xrightarrow{\text{2乗}} 9$、$9 \xrightarrow{\text{ルート}} 3$。単位を元に戻して分かりやすくしてくれるんだ。</p>
+                    </div>
+                    <div class="bg-indigo-50 border-l-4 border-indigo-400 text-indigo-800 p-4 rounded-md my-4 text-center">
+                        <p class="text-xl font-bold">$$ \text{標準偏差 (SD)} = \sqrt{\text{分散}} $$</p>
+                    </div>
+                    <p class="mt-2 text-gray-700 leading-relaxed">Bチャレンジャーズの場合、分散20だから、標準偏差は $\sqrt{20} \approx \bf{4.47}$ 本。「平均5本を中心に、だいたい4.5本くらいちらばってる」ってイメージしやすくなったね！</p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-indigo-700">「ふつうの範囲」を知る魔法、それが<span class="text-red-500">「平均 ± 2SD」</span></h3>
+                    <p class="mt-2 text-gray-700 leading-relaxed">科学者たちは標準偏差を2倍した<strong class="text-xl">「2SD」</strong>をよく使う。「平均から標準偏差の2倍ぶん離れた範囲」という意味だよ。</p>
+                    <p class="mt-2 text-gray-700 leading-relaxed">身長やテストの点数など、多くのデータは<strong class="text-indigo-600">約95%がこの「平均 ± 2SD」の範囲におさまる</strong>性質があるんだ！この範囲に入っていれば「だいたいふつう」と言えるわけ。</p>
+                    <div class="mt-6 bg-purple-50 border-l-4 border-purple-400 text-purple-900 p-4 rounded-md">
+                        <p class="font-bold">どうして約95%なの？ データの「山の形」の秘密</p>
+                        <p class="mt-2">多くのデータは<strong class="font-bold">「正規分布」</strong>っていう平均値が一番高くなる山の形になることが多い。この形なら<strong class="font-bold">いつでも約95.4%が「平均±2SD」の範囲に入る</strong>って数学的にわかってるんだ！だから科学者はこのルールで「ふつうの範囲」を決めてるんだね。</p>
+                    </div>
+                    <div class="prose-img bg-gray-50 p-4 rounded-lg mt-4">
+                        <svg viewBox="0 0 400 150" xmlns="http://www.w3.org/2000/svg" class="w-full">
+                           <defs>
+                                <linearGradient id="grad2sd" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#f5f3ff;" /> <stop offset="2.3%" style="stop-color:#f5f3ff;" /> <stop offset="2.3%" style="stop-color:#ddd6fe;" /> <stop offset="15.9%" style="stop-color:#ddd6fe;" /> <stop offset="15.9%" style="stop-color:#c4b5fd;" /> <stop offset="84.1%" style="stop-color:#c4b5fd;" /> <stop offset="84.1%" style="stop-color:#ddd6fe;" /> <stop offset="97.7%" style="stop-color:#ddd6fe;" /> <stop offset="97.7%" style="stop-color:#f5f3ff;" /> <stop offset="100%" style="stop-color:#f5f3ff;" />
+                                </linearGradient>
+                                <marker id="arrow-bell" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#4338ca" /></marker>
+                            </defs>
+                            <path d="M 20 120 C 80 120, 100 20, 200 20 C 300 20, 320 120, 380 120" stroke="#7c3aed" stroke-width="3" fill="url(#grad2sd)" />
+                            <line x1="200" y1="20" x2="200" y2="130" stroke="#5b21b6" stroke-width="1.5" stroke-dasharray="4" /> <text x="200" y="145" text-anchor="middle" font-size="12" font-weight="bold" fill="#5b21b6">平均</text>
+                            <line x1="116" y1="75" x2="116" y2="125" stroke="#a78bfa" stroke-width="1" stroke-dasharray="2" /><text x="116" y="138" text-anchor="middle" font-size="10" fill="#6d28d9">-1SD</text>
+                            <line x1="284" y1="75" x2="284" y2="125" stroke="#a78bfa" stroke-width="1" stroke-dasharray="2" /><text x="284" y="138" text-anchor="middle" font-size="10" fill="#6d28d9">+1SD</text>
+                            <line x1="32" y1="115" x2="32" y2="125" stroke="#c4b5fd" stroke-width="1" stroke-dasharray="2" /><text x="32" y="138" text-anchor="middle" font-size="10" fill="#8b5cf6">-2SD</text>
+                            <line x1="368" y1="115" x2="368" y2="125" stroke="#c4b5fd" stroke-width="1" stroke-dasharray="2" /><text x="368" y="138" text-anchor="middle" font-size="10" fill="#8b5cf6">+2SD</text>
+                            <text x="200" y="80" text-anchor="middle" font-weight="bold" fill="#4338ca" font-size="16">全体の約95%がこの中！</text>
+                            <path d="M 40 100 L 360 100" stroke="#4338ca" fill="none" stroke-width="1.5" marker-start="url(#arrow-bell)" marker-end="url(#arrow-bell)" />
+                        </svg>
+                    </div>
+                     <div class="mt-4 p-4 bg-gray-100 rounded-lg">
+                        <h4 class="font-bold text-lg text-gray-800">グラフの色の意味は？</h4>
+                        <ul class="mt-2 space-y-2 list-disc list-inside text-gray-700">
+                            <li><strong style="color:#a78bfa;">■ 中心の色 (平均±1SD)</strong>: データが一番たくさん集まっている範囲 (約68%)</li>
+                            <li><strong style="color:#c4b5fd;">■ その両となりの色 (平均±1SD〜±2SD)</strong>: ここまで合わせると約95%！</li>
+                             <li><strong style="color:#ddd6fe;">■ 一番外側の色 (平均±2SDの外)</strong>: ここに入るデータはたった約5%しかない「珍しい」範囲。</li>
+                        </ul>
+                        <p class="mt-4 font-bold bg-white p-3 rounded-md shadow-sm">矢印の範囲（平均±2SD）が科学で言う「ふつうに起こる範囲 (95%信頼区間)」なんだ！</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-indigo-700">なぜ科学で使われるの？</h3>
+                    <p class="mt-2 text-gray-700 leading-relaxed">科学者たちはこの「95%」を使って<strong class="text-xl">「これは偶然か？特別な発見か？」</strong>を判断しているんだ。</p>
+                    <div class="mt-4 bg-white p-6 rounded-xl shadow-inner border">
+                        <p class="font-bold">【例】新しい肥料でトマトは大きくなる？</p>
+                        <p class="mt-2 text-gray-600">普通の肥料のトマトの「平均 ± 2SD」が「80g〜120g」だったとする（ふつうはこの範囲）。新しい肥料で育てたら<strong class="text-2xl text-red-600">150g</strong>になった！ これは「ふつうの範囲」を超えている。偶然この大きさになる確率は5%以下だから、「偶然じゃない！肥料に効果がある！」と判断できるんだ。</p>
+                    </div>
+                    <p class="mt-4 text-gray-700 leading-relaxed">「平均±2SD」は、「本当に意味のある違い」を見つける虫めがねなんだね！</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-ttest" class="card p-6 sm:p-10">
+            <h2 class="text-3xl font-bold text-center mb-8 text-rose-800">比べてみよう！ t検定のチカラ💪</h2>
+            <div class="max-w-3xl mx-auto space-y-8">
+                <div>
+                    <h3 class="text-2xl font-bold text-rose-700">平均値の「差」、ホントにある？</h3>
+                    <p class="mt-2 text-gray-700 leading-relaxed">先生！今度は2つのグループの<strong class="text-rose-600">「平均値に本当に差があるのか？」</strong>を確かめる方法を見てみませんか？✨ AパワーズとBチャレンジャーズ、平均は同じ「5本」だけど、本当に実力は同じって言えるのかな？</p>
+                    <p class="mt-2 text-gray-700 leading-relaxed">そんな疑問に答えてくれるのが<strong class="text-2xl text-rose-700">『t検定』</strong>なんです！</p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-rose-700">t検定ってなあに？</h3>
+                    <p class="mt-2 text-gray-700 leading-relaxed">t検定は、2つのグループの平均値の差が<strong class="text-rose-600">単なる偶然か、統計的に意味のある（＝有意な）差か</strong>を判断するテストです。特に、データが<strong class="text-rose-600">「正規分布」</strong>（山の形）に近いときに使う<strong class="text-rose-600">『パラメトリック検定』</strong>の代表選手です。</p>
+                    <div class="prose-img bg-gray-50 p-4 rounded-lg mt-4">
+                        <svg viewBox="0 0 400 150" xmlns="http://www.w3.org/2000/svg" class="w-full max-w-sm mx-auto">
+                            <path d="M 50 130 C 100 130, 120 30, 200 30 C 280 30, 300 130, 350 130" stroke="#fb7185" stroke-width="2" fill="rgba(251, 113, 133, 0.1)" />
+                            <line x1="200" y1="30" x2="200" y2="140" stroke="#e11d48" stroke-width="1" stroke-dasharray="4" />
+                            <text x="200" y="148" text-anchor="middle" font-size="10" fill="#e11d48">グループ1 平均</text>
+                            <path d="M 100 130 C 150 130, 170 50, 250 50 C 330 50, 350 130, 400 130" stroke="#38bdf8" stroke-width="2" stroke-dasharray="5 3" fill="rgba(56, 189, 248, 0.05)" />
+                            <line x1="250" y1="50" x2="250" y2="140" stroke="#0ea5e9" stroke-width="1" stroke-dasharray="4" />
+                            <text x="250" y="148" text-anchor="middle" font-size="10" fill="#0ea5e9">グループ2 平均</text>
+                            <line x1="0" y1="130" x2="400" y2="130" stroke="#9ca3af" stroke-width="1" />
+                            <text x="225" y="90" text-anchor="middle" font-size="12" font-weight="bold" fill="#881337">この「平均値の差」は<br>偶然？ それとも意味がある？</text>
+                        </svg>
+                    </div>
+                     <p class="mt-2 text-center text-gray-600">多くのデータは正規分布に近い形になります。</p>
+                </div>
+                <div>
+                     <h3 class="text-2xl font-bold text-rose-700">「パラメトリック検定」とは？</h3>
+                     <p class="mt-2 text-gray-700 leading-relaxed">データが<strong class="text-rose-600">特定のルール（正規分布など）に従っていると『仮定』</strong>して行う分析方法のことです。</p>
+                    <div class="mt-4 bg-lime-50 border-l-4 border-lime-400 text-lime-900 p-4 rounded-md">
+                        <p class="font-bold">メリット・注意点</p>
+                        <ul class="mt-2 list-disc list-inside space-y-1">
+                            <li><strong class="text-lime-700">⭕ メリット:</strong> 仮定通りなら、少ないデータでも<strong class="font-bold">パワフルな分析</strong>ができます！</li>
+                            <li><strong class="text-red-700">⚠️ 注意点:</strong> 仮定から大きく外れたデータに使うと<strong class="font-bold">間違った結論</strong>になるかも…！</li>
+                        </ul>
+                    </div>
+                     <p class="mt-4 text-gray-700 leading-relaxed">データが正規分布に従わないかも？という時は「ノンパラメトリック検定」を使います。</p>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-rose-700">t値の計算式（対応のないt検定、等分散を仮定）</h3>
+                    <p class="mt-2 text-gray-700 leading-relaxed">t値が大きいほど「平均値の差は偶然とは言えない」と考えられます。</p>
+                    <div class="bg-rose-50 border-l-4 border-rose-400 text-rose-800 p-4 rounded-md my-4 text-center overflow-x-auto">
+                        <p class="text-xl font-bold">$$ t = \frac{\bar{X}_1 - \bar{X}_2}{s_p \sqrt{\frac{1}{n_1} + \frac{1}{n_2}}} $$</p>
+                    </div>
+                    <div class="mt-4 p-4 bg-gray-100 rounded-lg">
+                        <h4 class="font-bold text-lg text-gray-800">式の意味</h4>
+                        <ul class="mt-2 space-y-2 text-gray-700">
+                            <li>$\bar{X}_1, \bar{X}_2$ : 各グループの<strong class="text-rose-600">平均値</strong>。差が大きいほどt値も大きい。</li>
+                            <li>$n_1, n_2$ : 各グループの<strong class="text-rose-600">データ数</strong>。多いほどt値は大きくなりやすい。</li>
+                            <li>$s_p$ : 2グループの<strong class="text-rose-600">データのちらばり具合（標準偏差）</strong>を平均したもの。ちらばりが小さいほどt値は大きい。</li>
+                        </ul>
+                    </div>
+                     <p class="mt-4 text-gray-700 leading-relaxed">($s_p^2$ はプールされた分散: $s_p^2 = \frac{(n_1-1)s_1^2 + (n_2-1)s_2^2}{n_1 + n_2 - 2}$、$s_1^2, s_2^2$ は各グループの不偏分散)</p>
+                    <div class="bg-yellow-100 border-l-4 border-yellow-400 text-yellow-800 p-4 rounded-md my-4 text-center">
+                        <p class="text-lg font-bold">$$ t値 \approx \frac{\text{グループ間の平均値の差}}{\text{データのばらつき具合}} $$</p>
+                        <p class="mt-2">ばらつきに比べて平均値の差が十分に大きければt値も大きい！</p>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-2xl font-bold text-rose-700">t値が計算できたら？ → p値をチェック！</h3>
+                     <p class="mt-2 text-gray-700 leading-relaxed">計算したt値と<strong class="text-rose-600">自由度</strong>（$n_1 + n_2 - 2$）を使って<strong class="text-rose-600">『p値』</strong>を計算します。</p>
+                     <p class="mt-2 text-gray-700 leading-relaxed">p値は「もし本当は平均値に差がないとしたら、今回のt値（かそれ以上）が偶然得られる確率」です。</p>
+                     <p class="mt-2 text-gray-700 leading-relaxed">p値が<strong class="text-rose-600">0.05未満（5%未満）</strong>なら、「偶然とは考えにくい！平均値には意味のある差（有意差）がある！」と結論づけます。</p>
+                     <p class="mt-4 bg-gray-100 p-4 rounded-lg text-gray-800">今は「t値が大きいほどp値は小さくなり、差があると言いやすくなる」と覚えておけばOK！👍</p>
+                </div>
+                <div class="bg-pink-50 text-pink-900 p-8 rounded-2xl text-center">
+                    <h3 class="text-2xl font-bold mb-4">まとめ！</h3>
+                    <ul class="list-disc list-inside text-left space-y-2 text-lg mx-auto max-w-lg">
+                        <li>t検定は<strong class="text-pink-700">2グループの平均値を比べる</strong>ツール！</li>
+                        <li>データが<strong class="text-pink-700">正規分布</strong>に近いときに使う<strong class="text-pink-700">パラメトリック検定</strong>だよ。</li>
+                        <li><strong class="text-pink-700">t値</strong>を計算し、<strong class="text-pink-700">p値</strong>が<strong class="text-pink-700">0.05未満</strong>なら「差がある！」と言えることが多いよ。</li>
+                    </ul>
+                     <p class="text-lg mt-6">医学や心理学など、いろんな場面で大活躍しているんですよ！ 😊</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="section-ttest-simulator" class="card p-6 sm:p-10">
+            <h2 class="text-3xl font-bold text-center mb-8 text-cyan-800">体験２：t検定シミュレーター🔬</h2>
+            <p class="text-center text-gray-600 mb-8 max-w-3xl mx-auto">2つのグループのデータを入力して、t検定をやってみよう！<br>データの分布（ヒストグラム）も一緒に見て、t検定の結果が信頼できそうか考えてみてね。</p>
+            <div class="grid md:grid-cols-2 gap-8">
+                <div class="input-group">
+                    <h3 class="text-xl font-bold mb-3 text-cyan-700">グループ1 のデータ (10個)</h3>
+                    <div class="input-grid" id="ttest-inputs-1">
+                        </div>
+                </div>
+                <div class="input-group">
+                    <h3 class="text-xl font-bold mb-3 text-fuchsia-700">グループ2 のデータ (10個)</h3>
+                    <div class="input-grid" id="ttest-inputs-2">
+                        </div>
+                </div>
+            </div>
+            <div class="text-center mt-6 mb-10">
+                 <button id="runTTestBtn" class="btn btn-secondary text-xl">t検定を実行！</button>
+            </div>
+            <div id="ttest-result" class="space-y-8">
+                </div>
+        </section>
+
+    </div><footer class="text-center p-8 text-gray-500">
+        <p>&copy; 2025 たいけん！分散・t検定ワールド</p>
+    </footer>
+
+    <script>
+        /*
+         * 問題点2 解決策:
+         * KaTeXの再レンダリング用関数を定義
+         */
+        function renderLatexInElement(element) {
+             if (!element) return;
+             // renderMathInElement がロード済みか確認
+             if (typeof renderMathInElement === 'function') {
+                 console.log("Dynamically rendering KaTeX for element:", element.id || element.tagName);
+                 try {
+                     renderMathInElement(element, {
+                         delimiters: [
+                             {left: '$$', right: '$$', display: true},
+                             {left: '$', right: '$', display: false},
+                             {left: '\\(', right: '\\)', display: false},
+                             {left: '\\[', right: '\\]', display: true}
+                         ],
+                         throwOnError: false
+                     });
+                 } catch (error) {
+                     console.error("Dynamic KaTeX rendering error:", error);
+                 }
+             } else if (typeof renderMathInElement === 'undefined') {
+                  // まだロードされていない場合（DOMContentLoadedがonloadより先に発火した場合など）
+                  console.warn("renderMathInElement is not defined yet, retrying...");
+                  // 少し待ってから再試行
+                  setTimeout(() => renderLatexInElement(element), 100);
+             }
+        }
+        
+        // --- Helper Function ---
+        function getNumericData(inputId) {
+            const container = document.getElementById(inputId);
+            if (!container) return { data: [], error: true };
+            const inputs = container.querySelectorAll('input');
+            const data = [];
+            let error = false;
+            inputs.forEach(input => {
+                const value = input.value.trim();
+                if (value === '' || isNaN(parseFloat(value))) {
+                    error = true;
+                    input.classList.add('border-red-500');
+                } else {
+                    input.classList.remove('border-red-500');
+                    data.push(parseFloat(value));
+                }
+            });
+            return { data, error };
+        }
+
+
+        // --- Interactive Calculation Steps (Toggle Visibility) ---
+        function toggleStep(elementId) {
+            const content = document.getElementById(elementId);
+            if (!content) return;
+            const currentlyVisible = document.querySelector('.step-content.visible');
+            if (content.classList.contains('visible')) {
+                content.classList.remove('visible');
+            } else {
+                if (currentlyVisible && currentlyVisible !== content) {
+                    currentlyVisible.classList.remove('visible');
+                }
+                setTimeout(() => {
+                    content.classList.add('visible');
+                    // ステップを開いたときにもKaTeXを再描画
+                    renderLatexInElement(content);
+                }, 50);
+            }
+        }
+
+        // --- Global Chart Variables ---
+        let teamChart = null;
+        let varianceUserChart = null;
+        let ttestChart1 = null;
+        let ttestChart2 = null;
+
+        // --- DOMContentLoaded ---
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // --- Smooth scroll for start button ---
+            const startBtn = document.getElementById('start-btn');
+            if (startBtn) {
+                startBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    document.querySelector(startBtn.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth' });
+                });
+            }
+
+            // --- Chart for Baseball Teams ---
+            const ctxTeam = document.getElementById('teamChart');
+            if (ctxTeam) {
+                 teamChart = new Chart(ctxTeam.getContext('2d'), {
+                    type: 'bar',
+                    data: { labels: ['選手1', '選手2', '選手3', '選手4', '選手5'], datasets: [{ label: 'Aパワーズ', data: [5, 5, 5, 5, 5], backgroundColor: 'rgba(255, 171, 118, 0.6)', borderColor: 'rgba(255, 171, 118, 1)', borderWidth: 2, borderRadius: 5 }, { label: 'Bチャレンジャーズ', data: [10, 0, 5, 10, 0], backgroundColor: 'rgba(118, 170, 255, 0.6)', borderColor: 'rgba(118, 170, 255, 1)', borderWidth: 2, borderRadius: 5 }] },
+                    options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'ヒット数 (本)', font: { size: 14 } } } }, plugins: { legend: { position: 'top', labels: { font: { size: 14 } } }, tooltip: { callbacks: { label: (context) => `${context.dataset.label}: ${context.raw} 本` } } } }
+                 });
+            } else { console.error("Canvas element for teamChart not found."); }
+
+            // --- Variance Calculator (Experience 1)---
+            const calculatorInputsContainer = document.getElementById('calculator-inputs');
+            const calculateVarianceBtn = document.getElementById('calculateVarianceBtn');
+            const calculatorResultDiv = document.getElementById('calculator-result');
+
+            if (calculatorInputsContainer) {
+                const defaultValues = [10, 20, 5, 15, 30, 25, 8, 12, 40, 5];
+                for (let i = 0; i < 10; i++) {
+                    const input = document.createElement('input'); input.type = 'number'; input.className = 'w-full p-2 border border-gray-300 rounded-md text-center focus:ring-2 focus:ring-orange-400 transition'; input.placeholder = `データ${i + 1}`; input.value = defaultValues[i]; input.setAttribute('aria-label', `分散計算用 データ ${i + 1}`); calculatorInputsContainer.appendChild(input);
+                }
+            } else { console.error("Calculator inputs container not found."); }
+
+            if (calculateVarianceBtn && calculatorResultDiv) {
+                calculateVarianceBtn.addEventListener('click', () => {
+                    const { data, error } = getNumericData('calculator-inputs');
+                    if (error) { calculatorResultDiv.innerHTML = `<p class="text-center text-red-500 font-bold">すべての欄に有効な数字を入力してください。</p>`; if (varianceUserChart) { varianceUserChart.destroy(); varianceUserChart = null; } return; }
+                    if (data.length < 2) { calculatorResultDiv.innerHTML = `<p class="text-center text-red-500 font-bold">分散を計算するには、少なくとも2つのデータが必要です。</p>`; if (varianceUserChart) { varianceUserChart.destroy(); varianceUserChart = null; } return; }
+
+                    const mean = simpleStatistics.mean(data);
+                    const variance = simpleStatistics.variance(data); // Sample variance (n-1)
+                    const stdDev = simpleStatistics.standardDeviation(data);
+
+                    let interpretation = '';
+                    if (variance === 0) { interpretation = '分散が0だ！すべてのデータが平均値とまったく同じなんだね！'; }
+                    else if (variance > mean * mean * 0.5) { interpretation = '分散が大きいね！データはかなり、ちらばっているみたい。'; }
+                    else if (variance > mean * mean * 0.1) { interpretation = 'データはすこし、ちらばっているかな。'; }
+                    else { interpretation = '分散が小さい！データが平均のまわりに集まっている証拠だね。'; }
+
+                    /*
+                     * 問題点3 解決策:
+                     * innerHTML に KaTeX の文字列を挿入する際、バックスラッシュを二重 (\\) にエスケープします。
+                     */
+                    calculatorResultDiv.innerHTML = `
+                        <div class="grid md:grid-cols-3 gap-6 text-center">
+                            <div class="bg-green-50 p-6 rounded-2xl"><h3 class="text-lg font-bold text-green-800">平均</h3><p class="text-4xl font-mono font-bold text-green-600">${mean.toFixed(2)}</p></div>
+                            <div class="bg-orange-50 p-6 rounded-2xl"><h3 class="text-lg font-bold text-orange-800">分散 (不偏分散)</h3><p class="text-4xl font-mono font-bold text-orange-500">${variance.toFixed(2)}</p></div>
+                            <div class="bg-indigo-50 p-6 rounded-2xl"><h3 class="text-lg font-bold text-indigo-800">標準偏差 (SD)</h3><p class="text-4xl font-mono font-bold text-indigo-500">${stdDev.toFixed(2)}</p></div>
+                        </div>
+                        <div class="text-center bg-blue-50 p-6 rounded-2xl"><p class="text-lg font-bold text-blue-900">${interpretation}</p></div>
+                        <div><p class="text-center text-xl font-bold mb-4">キミのデータのグラフ</p><div class="chart-container w-full max-w-2xl mx-auto h-80 sm:h-96 relative"><canvas id="varianceUserChart"></canvas></div></div>
+                        <div class="mt-4 bg-gray-50 p-4 rounded text-center katex-area">
+                           <p class="text-sm text-gray-600">（参考）不偏分散の式 (n-1で割る):</p>
+                           <div class="katex-display">$$ s^2 = \\frac{\\sum_{i=1}^{n} (X_i - \\bar{X})^2}{n-1} $$</div>
+                        </div>`;
+
+                    // Render chart AFTER innerHTML is updated
+                    const userChartCtx = document.getElementById('varianceUserChart');
+                    if (userChartCtx) {
+                        if(varianceUserChart) { varianceUserChart.destroy(); }
+                        varianceUserChart = new Chart(userChartCtx.getContext('2d'), { // Assign to global variable
+                            type: 'bar', data: { labels: data.map((_, i) => `データ${i + 1}`), datasets: [{ label: 'キミのデータ', data: data, backgroundColor: 'rgba(75, 192, 192, 0.6)', borderColor: 'rgba(75, 192, 192, 1)', borderWidth: 2, borderRadius: 5 }] },
+                            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: '値' } } }, plugins: { legend: { display: false } } }
+                        });
+                    } else { console.error("Canvas element for varianceUserChart not found.") }
+
+                    /*
+                     * 問題点2 解決策:
+                     * innerHTML の更新後、挿入された要素 (calculatorResultDiv) に対して
+                     * KaTeX のレンダリング関数を明示的に呼び出します。
+                     * setTimeoutでDOMの更新を待機します。
+                     */
+                    setTimeout(() => renderLatexInElement(calculatorResultDiv), 0);
+                });
+            } else { console.error("Variance calculator elements not found."); }
+
+
+             // --- t-test Simulator (Experience 2) ---
+            const ttestInputsContainer1 = document.getElementById('ttest-inputs-1');
+            const ttestInputsContainer2 = document.getElementById('ttest-inputs-2');
+            const runTTestBtn = document.getElementById('runTTestBtn');
+            const ttestResultDiv = document.getElementById('ttest-result');
+
+            const ttestDefaultValues1 = [10, 12, 11, 13, 10, 14, 12, 11, 13, 14];
+            const ttestDefaultValues2 = [15, 14, 16, 17, 15, 18, 16, 17, 14, 18];
+            function setupTTestInputs(container, defaults, groupNum) { if (container) { for (let i = 0; i < 10; i++) { const input = document.createElement('input'); input.type = 'number'; input.className = 'w-full p-2 border border-gray-300 rounded-md text-center focus:ring-2 focus:ring-cyan-400 transition'; input.placeholder = `データ${i + 1}`; input.value = defaults[i]; input.setAttribute('aria-label', `グループ ${groupNum} データ ${i + 1}`); container.appendChild(input); } } else { console.error(`t-test inputs container ${groupNum} not found.`); } }
+            setupTTestInputs(ttestInputsContainer1, ttestDefaultValues1, 1);
+            setupTTestInputs(ttestInputsContainer2, ttestDefaultValues2, 2);
+
+            if (runTTestBtn && ttestResultDiv) {
+                runTTestBtn.addEventListener('click', () => {
+                     const group1Result = getNumericData('ttest-inputs-1'); const group2Result = getNumericData('ttest-inputs-2');
+                     if (group1Result.error || group2Result.error) { ttestResultDiv.innerHTML = `<p class="text-center text-red-500 font-bold">すべての欄に有効な数字を入力してください。</p>`; if (ttestChart1) ttestChart1.destroy(); if (ttestChart2) ttestChart2.destroy(); ttestChart1=ttestChart2=null; return; }
+                     const data1 = group1Result.data; const data2 = group2Result.data;
+                     if (data1.length < 2 || data2.length < 2) { ttestResultDiv.innerHTML = `<p class="text-center text-red-500 font-bold">t検定を行うには、各グループに少なくとも2つのデータが必要です。</p>`; if (ttestChart1) ttestChart1.destroy(); if (ttestChart2) ttestChart2.destroy(); ttestChart1=ttestChart2=null; return; }
+
+                     const n1 = data1.length; const n2 = data2.length;
+                     const mean1 = simpleStatistics.mean(data1); const mean2 = simpleStatistics.mean(data2);
+                     const variance1 = simpleStatistics.variance(data1); const variance2 = simpleStatistics.variance(data2);
+                     const pooledVariance = ((n1 - 1) * variance1 + (n2 - 1) * variance2) / (n1 + n2 - 2);
+                     const pooledStdDev = Math.sqrt(pooledVariance);
+                     const denominator = pooledStdDev * Math.sqrt(1/n1 + 1/n2);
+                     const tValue = (denominator === 0 && mean1 === mean2) ? 0 : (mean1 - mean2) / denominator;
+                     const absTValue = Math.abs(tValue);
+
+                     let tInterpretation = '';
+                     const criticalT = 2.101; // df = 18, alpha = 0.05, two-tailed
+                     if (isNaN(tValue)){
+                          tInterpretation = `t値が計算できませんでした。入力データを確認してください。（分散が0になる場合など）`;
+                     } else if (absTValue > criticalT) {
+                         tInterpretation = `t値 (${tValue.toFixed(2)}) は${criticalT.toFixed(2)}より大きいね！ 2つのグループの平均値には、<strong class="text-rose-600">統計的に意味のある差がありそう</strong>だよ！ (p < 0.05)`;
+                     } else {
+                         tInterpretation = `t値 (${tValue.toFixed(2)}) は${criticalT.toFixed(2)}以下だね。 平均値の差は<strong class="text-gray-600">偶然の可能性が高いかも</strong>しれないね。 (p >= 0.05)`;
+                     }
+
+                    const looksNormal = (data) => {
+                         if (data.length < 5) return 'データ数が少なすぎて形は不明';
+                         const mean = simpleStatistics.mean(data);
+                         const stdDev = simpleStatistics.standardDeviation(data);
+                         if (stdDev === 0) return 'すべてのデータが同じ値';
+                         const min = simpleStatistics.min(data);
+                         const max = simpleStatistics.max(data);
+                         const skewnessFactor = Math.abs((max - mean) - (mean - min)) / stdDev;
+                         const rangeFactor = (max - min) / stdDev;
+                         if (skewnessFactor > 1.2) { return 'かなり偏っている（歪んでいる）かも？'; }
+                         if (rangeFactor > 7 || rangeFactor < 2.5) { return '分布の広がりが正規分布と違うかも？'; }
+                         return 'だいたい山の形（正規分布）に近そう';
+                     };
+                     const normality1 = looksNormal(data1); const normality2 = looksNormal(data2);
+                     const distributionWarning = `グループ1: ${normality1}。<br>グループ2: ${normality2}。<br><strong class="text-yellow-900">t検定はデータが山の形（正規分布）に近いときに一番信頼できるよ。</strong>もし形が大きく違うときは結果の解釈に注意！🤔`;
+
+                    /*
+                     * 問題点3 解決策:
+                     * innerHTML に KaTeX の文字列を挿入する際、バックスラッシュを二重 (\\) にエスケープします。
+                     */
+                     ttestResultDiv.innerHTML = `
+                         <div class="grid md:grid-cols-2 gap-6 text-center">
+                             <div class="bg-cyan-50 p-4 rounded-xl"><h4 class="text-lg font-bold text-cyan-800">グループ1</h4><p>平均: <strong class="text-xl">${mean1.toFixed(2)}</strong></p><p>不偏分散: <strong class="text-xl">${variance1.toFixed(2)}</strong></p><p>データ数: ${n1}</p></div>
+                             <div class="bg-fuchsia-50 p-4 rounded-xl"><h4 class="text-lg font-bold text-fuchsia-800">グループ2</h4><p>平均: <strong class="text-xl">${mean2.toFixed(2)}</strong></p><p>不偏分散: <strong class="text-xl">${variance2.toFixed(2)}</strong></p><p>データ数: ${n2}</p></div>
+                         </div>
+                         <div class="text-center bg-rose-50 p-6 rounded-2xl"><h4 class="text-xl font-bold text-rose-800 mb-2">t検定の結果 (等分散を仮定)</h4><p class="text-lg">計算されたt値: <strong class="text-3xl font-mono text-rose-600">${isNaN(tValue) ? '計算不可' : tValue.toFixed(3)}</strong></p><p class="mt-4 text-lg">${tInterpretation}</p></div>
+                         <div class="chart-grid">
+                            <div class="chart-container"><canvas id="ttestChart1"></canvas><p class="text-center text-sm text-gray-500 mt-1">グループ1 のヒストグラム</p></div>
+                            <div class="chart-container"><canvas id="ttestChart2"></canvas><p class="text-center text-sm text-gray-500 mt-1">グループ2 のヒストグラム</p></div>
+                         </div>
+                         <div class="text-center bg-yellow-50 p-4 rounded-xl border border-yellow-200"><h4 class="text-lg font-bold text-yellow-800 mb-2">⚠️ 分布のチェック！</h4><p class="text-gray-700">${distributionWarning}</p></div>
+                         <div class="mt-4 bg-gray-50 p-4 rounded katex-area">
+                           <p class="text-sm text-gray-600 text-center">t値の計算式:</p>
+                           <div class="katex-display">$$ t = \\frac{\\bar{X}_1 - \\bar{X}_2}{s_p \\sqrt{\\frac{1}{n_1} + \\frac{1}{n_2}}} $$</div>
+                           <p class="text-sm text-gray-600 text-center mt-2">プールされた分散の式:</p>
+                           <div class="katex-display">$$ s_p^2 = \\frac{(n_1-1)s_1^2 + (n_2-1)s_2^2}{n_1 + n_2 - 2} $$</div>
+                         </div>`;
+
+                    const createHistogram = (canvasId, data, groupLabel, color) => {
+                         const ctx = document.getElementById(canvasId);
+                         if (!ctx) { console.error(`Canvas ${canvasId} not found`); return null; }
+                         if (ttestChart1 && canvasId === 'ttestChart1') ttestChart1.destroy();
+                         if (ttestChart2 && canvasId === 'ttestChart2') ttestChart2.destroy();
+                         
+                         const min = Math.min(...data); const max = Math.max(...data);
+                         let bins = []; let labels = [];
+                         if (max === min && data.length > 0) {
+                             labels = [`${min.toFixed(1)}`]; bins = [data.length];
+                         } else {
+                             const numBins = Math.max(3, Math.min(8, Math.ceil(Math.sqrt(data.length) * 1.5)));
+                             const range = max - min;
+                             const binWidth = range > 0 ? Math.max(0.1, range / numBins) : 1;
+                             const start = range > 0 ? min : min - 0.5;
+                             for (let i = 0; i < numBins; i++) {
+                                 const lower = start + i * binWidth;
+                                 const upper = start + (i + 1) * binWidth;
+                                 const count = data.filter(x => x >= lower - 1e-9 && (i === numBins - 1 ? x <= upper + 1e-9 : x < upper - 1e-9)).length;
+                                 bins.push(count);
+                                 labels.push(`[${lower.toFixed(1)}~${upper.toFixed(1)}${i === numBins - 1 ? ']' : ')'}`);
+                             }
+                         }
+                         return new Chart(ctx.getContext('2d'), {
+                             type: 'bar', data: { labels: labels, datasets: [{ label: `${groupLabel} の度数`, data: bins, backgroundColor: color.bg, borderColor: color.border, borderWidth: 1 }] },
+                             options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: '度数（個数）' } }, x: { title: { display: true, text: '値の範囲' } } }, plugins: { legend: { display: false }, tooltip:{ enabled: true } } }
+                         });
+                    };
+
+                    ttestChart1 = createHistogram('ttestChart1', data1, 'グループ1', { bg: 'rgba(54, 162, 235, 0.6)', border: 'rgba(54, 162, 235, 1)' });
+                    ttestChart2 = createHistogram('ttestChart2', data2, 'グループ2', { bg: 'rgba(255, 99, 132, 0.6)', border: 'rgba(255, 99, 132, 1)' });
+
+                    /*
+                     * 問題点2 解決策:
+                     * innerHTML の更新後、挿入された要素 (ttestResultDiv) に対して
+                     * KaTeX のレンダリング関数を明示的に呼び出します。
+                     * setTimeoutでDOMの更新を待機します。
+                     */
+                    setTimeout(() => renderLatexInElement(ttestResultDiv), 0);
+                });
+            } else { console.error("t-test simulator elements not found."); }
+
+        }); // End DOMContentLoaded
+    </script>
+</body>
+</html>
